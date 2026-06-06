@@ -1,0 +1,10 @@
+{
+  "name": "Canlı Müzik Nerede",
+  "short_name": "Canlı Müzik",
+  "description": "Canlı müzik etkinliklerini keşfedin.",
+  "lang": "tr",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1326",
+  "theme_color": "#0b1326"
+}
