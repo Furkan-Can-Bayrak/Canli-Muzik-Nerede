@@ -25,6 +25,11 @@ enum EventStatus {
   PUBLISHED
 }
 
+enum ReviewTargetType {
+  BAND
+  CAFE
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -41,6 +46,8 @@ model User {
 
   conversationsAsCafe Conversation[] @relation("ConversationCafe")
   conversationsAsBand Conversation[] @relation("ConversationBand")
+
+  reviews Review[]
 }
 
 model CustomerProfile {
@@ -60,6 +67,7 @@ model CafeProfile {
   longitude   Float?
   phone       String?
   description String?
+  coverUrl    String?
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   province Province  @relation(fields: [provinceId], references: [id], onDelete: Restrict)
@@ -220,4 +228,31 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@index([senderUserId])
+}
+
+model Review {
+  id           String           @id @default(uuid())
+  authorUserId String
+  targetType   ReviewTargetType
+  targetId     String
+  rating       Int
+  body         String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  author User @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@unique([authorUserId, targetType, targetId])
+  @@index([targetType, targetId, createdAt])
+}
+
+model ReviewSummary {
+  id          String           @id @default(uuid())
+  targetType  ReviewTargetType
+  targetId    String
+  summary     String
+  reviewCount Int
+  generatedAt DateTime         @default(now())
+
+  @@unique([targetType, targetId])
 }

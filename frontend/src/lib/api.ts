@@ -6,8 +6,24 @@ export function getApiBaseUrl(): string {
   return base.replace(/\/$/, "");
 }
 
+/** Tarayıcıda yerel API için same-origin proxy (/backend → Nest). */
+function getRequestBaseUrl(): string {
+  if (typeof window === "undefined") {
+    return getApiBaseUrl();
+  }
+  try {
+    const base = getApiBaseUrl();
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(base)) {
+      return "/backend";
+    }
+  } catch {
+    /* fall through */
+  }
+  return getApiBaseUrl();
+}
+
 function joinUrl(path: string): string {
-  const base = getApiBaseUrl();
+  const base = getRequestBaseUrl();
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${base}${p}`;
 }
@@ -31,6 +47,29 @@ export async function apiFetch(
   return fetch(joinUrl(path), {
     ...rest,
     headers: h,
+    credentials: "include",
+  });
+}
+
+export type ApiUploadOptions = {
+  token?: string | null;
+  formData: FormData | (() => FormData);
+};
+
+export async function apiUpload(
+  path: string,
+  init: ApiUploadOptions,
+): Promise<Response> {
+  const { token, formData } = init;
+  const h = new Headers();
+  if (token) {
+    h.set("Authorization", `Bearer ${token}`);
+  }
+  const body = typeof formData === "function" ? formData() : formData;
+  return fetch(joinUrl(path), {
+    method: "POST",
+    headers: h,
+    body,
     credentials: "include",
   });
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { bandCoverMedia } from "@/lib/band-media";
 import { IconArrowForward } from "@/components/icons/outline";
 import { useAuth } from "@/contexts/auth-context";
 
@@ -18,14 +19,6 @@ type BandPublic = {
   media?: { id: string; type: string; url: string }[];
 };
 
-function poster(b: BandPublic) {
-  const vid = b.media?.find((m) => m.type === "VIDEO");
-  if (vid) return { kind: "video" as const, url: vid.url };
-  const img = b.media?.find((m) => m.type === "IMAGE");
-  if (img) return { kind: "image" as const, url: img.url };
-  return null;
-}
-
 const GENRE_BADGE = ["primary", "secondary", "tertiary"] as const;
 
 export function FeaturedBands() {
@@ -39,10 +32,13 @@ export function FeaturedBands() {
     queueMicrotask(() => {
       void (async () => {
         try {
-          const res = await apiFetch("/bands", { token });
+          const res = await apiFetch("/bands?take=3", { token });
           if (!res.ok) throw new Error("Liste alınamadı.");
-          const data = (await res.json()) as BandPublic[];
-          if (!cancelled) setBands(data.slice(0, 3));
+          const data = (await res.json()) as
+            | BandPublic[]
+            | { items: BandPublic[] };
+          const items = Array.isArray(data) ? data : data.items;
+          if (!cancelled) setBands(items.slice(0, 3));
         } catch {
           if (!cancelled) setError("Öne çıkan gruplar yüklenemedi.");
         }
@@ -82,7 +78,7 @@ export function FeaturedBands() {
       ) : (
         <div className="grid grid-cols-1 gap-gutter md:grid-cols-3">
           {bands.map((b, i) => {
-            const thumb = poster(b);
+            const thumb = bandCoverMedia(b.media, b.genres, b.id);
             const genre = b.genres[0]?.name ?? "Canlı müzik";
             const badge = GENRE_BADGE[i % GENRE_BADGE.length];
             const badgeBg =
@@ -102,20 +98,12 @@ export function FeaturedBands() {
                 className="neon-glow group relative aspect-[4/5] cursor-pointer overflow-hidden rounded-3xl"
               >
                 <div className="absolute inset-0 bg-surface-container-high">
-                  {thumb?.kind === "image" ? (
+                  {thumb ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={thumb.url}
                       alt=""
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    />
-                  ) : thumb?.kind === "video" ? (
-                    <video
-                      src={thumb.url}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                      muted
-                      playsInline
-                      preload="metadata"
                     />
                   ) : (
                     <div className="h-full w-full bg-gradient-to-br from-primary/40 via-surface-container-high to-secondary/30" />

@@ -9,9 +9,15 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import type { Request } from 'express';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import type { Prisma } from '@prisma/client';
 import { EventStatus, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -26,6 +32,12 @@ import { cafeUserIdsWithVisiblePhone } from '../cafes/cafe-phone-visibility';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { ListEventsQuery } from './dto/list-events.query';
+import { UploadsService } from '../uploads/uploads.service';
+
+const posterUploadInterceptor = FileInterceptor('file', {
+  storage: memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 const eventPublicInclude = {
   province: true,
@@ -58,7 +70,21 @@ function presentEventLocation(row: EventPublicRow) {
 @ApiTags('events')
 @Controller('events')
 export class EventsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly uploads: UploadsService,
+  ) {}
+
+  private async findOwnedEvent(cafeUserId: string, eventId: string) {
+    const ev = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, cafeId: true, posterUrl: true },
+    });
+    if (!ev || ev.cafeId !== cafeUserId) {
+      throw new NotFoundException('Event not found');
+    }
+    return ev;
+  }
 
   private buildWhere(q: ListEventsQuery): Prisma.EventWhereInput {
     const and: Prisma.EventWhereInput[] = [];
@@ -221,7 +247,52 @@ export class EventsController {
 
   @ApiBearerAuth('bearer')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.BAND)
+  @Roles(Role.CAFE)
+  @Post(':id/poster')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(posterUploadInterceptor)
+  async uploadPoster(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+  ) {
+    const existing = await this.findOwnedEvent(user.userId, id);
+    const storedPath = await this.uploads.saveEventPoster(
+      user.userId,
+      id,
+      file,
+    );
+    const posterUrl = this.uploads.toPublicUrl(storedPath, req);
+    if (existing.posterUrl) {
+      await this.uploads.deleteStoredUrl(existing.posterUrl);
+    }
+    await this.prisma.event.update({
+      where: { id },
+      data: { posterUrl },
+    });
+    return { posterUrl };
+  }
+
+  @ApiBearerAuth('bearer')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.CAFE)
+  @Delete(':id/poster')
+  async deletePoster(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+  ) {
+    const existing = await this.findOwnedEvent(user.userId, id);
+    if (existing.posterUrl) {
+      await this.uploads.deleteStoredUrl(existing.posterUrl);
+    }
+    await this.prisma.event.update({
+      where: { id },
+      data: { posterUrl: null },
+    });
+    return { ok: true };
+  }
+
   @Post(':id/publish')
   async publishAsBand(
     @CurrentUser() user: RequestUser,
@@ -316,6 +387,14 @@ export class EventsController {
     });
     if (!existing) throw new NotFoundException('Event not found');
     if (existing.cafeId !== user.userId) throw new NotFoundException('Event not found');
+
+    const full = await this.prisma.event.findUnique({
+      where: { id },
+      select: { posterUrl: true },
+    });
+    if (full?.posterUrl) {
+      await this.uploads.deleteStoredUrl(full.posterUrl);
+    }
 
     await this.prisma.event.delete({ where: { id } });
     return { ok: true };

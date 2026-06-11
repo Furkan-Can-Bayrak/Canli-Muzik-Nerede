@@ -1,4 +1,6 @@
 import type { Role } from '@prisma/client';
+import type { Request } from 'express';
+import { toPublicMediaUrl } from '../uploads/uploads.service';
 
 type BandWithRelations = {
   userId: string;
@@ -24,6 +26,7 @@ export function presentBand(
   band: BandWithRelations,
   viewerRole?: Role,
   viewerUserId?: string,
+  req?: Request,
 ): Record<string, unknown> {
   const canSeePrivate =
     viewerRole === 'CAFE' ||
@@ -47,7 +50,15 @@ export function presentBand(
     /** @deprecated use provinces */
     cities: provinces,
     genres: band.genres.map((g) => g.genre),
-    media: band.media,
+    media: [...band.media]
+      .sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      )
+      .map((m) => ({
+        ...m,
+        url: toPublicMediaUrl(m.url, req),
+      })),
     phone: canSeePrivate ? band.phone : undefined,
     basePrice: canSeePrivate ? band.basePrice : undefined,
   };

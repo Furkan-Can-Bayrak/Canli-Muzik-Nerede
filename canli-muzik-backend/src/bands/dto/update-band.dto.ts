@@ -1,4 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
   IsArray,
@@ -10,6 +11,12 @@ import {
   MinLength,
 } from 'class-validator';
 
+function roundToInt(value: unknown): unknown {
+  if (value === undefined || value === null || value === '') return value;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n) : value;
+}
+
 export class UpdateBandDto {
   @ApiPropertyOptional()
   @IsOptional()
@@ -19,6 +26,8 @@ export class UpdateBandDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @Type(() => Number)
+  @Transform(({ value }) => roundToInt(value))
   @IsInt()
   @Min(1)
   memberCount?: number;
@@ -30,6 +39,8 @@ export class UpdateBandDto {
 
   @ApiPropertyOptional({ description: 'Only visible to cafes' })
   @IsOptional()
+  @Type(() => Number)
+  @Transform(({ value }) => roundToInt(value))
   @IsInt()
   @Min(0)
   basePrice?: number;

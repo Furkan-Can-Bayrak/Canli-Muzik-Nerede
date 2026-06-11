@@ -11,5 +11,11 @@ export class GenresController {
   list() {
     return this.prisma.genre.findMany({ orderBy: { name: 'asc' } });
   }
+
+  /** Liste API — statik /genres/*.webp dosyalarından ayrı tutulur */
+  @Get('catalog')
+  catalog() {
+    return this.list();
+  }
 }
 

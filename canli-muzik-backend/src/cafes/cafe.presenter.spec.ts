@@ -11,6 +11,7 @@ describe('presentCafe', () => {
     longitude: 29.0,
     phone: '+905551112233',
     description: null,
+    coverUrl: null,
     province: { id: 'p1', name: 'İstanbul', plateCode: '34' },
     district: { id: 'd1', name: 'Kadıköy' },
   };

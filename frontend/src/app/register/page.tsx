@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { BusinessAddressPicker } from "@/components/location/BusinessAddressPicker";
 import {
   BandAreaPicker,
@@ -11,6 +11,9 @@ import {
 } from "@/components/location/BandAreaPicker";
 import { useAuth } from "@/contexts/auth-context";
 import { apiFetch } from "@/lib/api";
+import { uploadBandMedia } from "@/lib/band-media";
+import { blurOnWheel, parseIntegerField } from "@/lib/number-input";
+import { navigateAfterAuth } from "@/lib/auth-routes";
 import type { BusinessAddressValue, Province } from "@/lib/location-types";
 type Genre = { id: string; name: string };
 
@@ -59,6 +62,9 @@ export default function RegisterPage() {
   const [bandDesc, setBandDesc] = useState("");
   const [bandArea, setBandArea] = useState<BandAreaValue>(emptyBandArea());
   const [bandGenreIds, setBandGenreIds] = useState<Set<string>>(new Set());
+  const [bandCoverFile, setBandCoverFile] = useState<File | null>(null);
+  const [bandCoverPreview, setBandCoverPreview] = useState<string | null>(null);
+  const [bandVideoFile, setBandVideoFile] = useState<File | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +72,7 @@ export default function RegisterPage() {
       try {
         const [rp, rg] = await Promise.all([
           apiFetch("/provinces"),
-          apiFetch("/genres"),
+          apiFetch("/genres/catalog"),
         ]);
         if (!rp.ok || !rg.ok) throw new Error();
         const [pList, gList] = await Promise.all([
@@ -86,8 +92,20 @@ export default function RegisterPage() {
     };
   }, []);
 
-  if (ready && user) {
-    router.replace("/account");
+  const redirectedRef = useRef(false);
+  const redirecting = ready && Boolean(user) && !pending;
+
+  useEffect(() => {
+    if (!user) {
+      redirectedRef.current = false;
+      return;
+    }
+    if (!ready || pending || redirectedRef.current) return;
+    redirectedRef.current = true;
+    navigateAfterAuth(router, user.role);
+  }, [ready, user, pending, router]);
+
+  if (redirecting) {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center text-sm text-on-surface-variant">
         Yönlendiriliyorsunuz…
@@ -102,18 +120,62 @@ export default function RegisterPage() {
     return next;
   }
 
+  function onBandVideoChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setBandVideoFile(null);
+      return;
+    }
+    const ok =
+      file.type.startsWith("video/") ||
+      [".mp4", ".webm", ".mov"].some((ext) =>
+        file.name.toLowerCase().endsWith(ext),
+      );
+    if (!ok) {
+      setError("Video MP4, WebM veya MOV olmalıdır.");
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      setError("Video en fazla 50 MB olabilir.");
+      return;
+    }
+    setError(null);
+    setBandVideoFile(file);
+  }
+
+  function onBandCoverChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setBandCoverFile(null);
+      setBandCoverPreview(null);
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setError("Kapak görseli JPEG, PNG, WebP veya GIF olmalıdır.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Görsel en fazla 5 MB olabilir.");
+      return;
+    }
+    setError(null);
+    setBandCoverFile(file);
+    setBandCoverPreview(URL.createObjectURL(file));
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setPending(true);
     try {
+      let registeredUser;
       if (tab === "customer") {
-        await registerCustomer(email, password);
+        registeredUser = await registerCustomer(email, password);
       } else if (tab === "cafe") {
         if (!cafeLocation.provinceId) throw new Error("İl seçin.");
         if (cafeLocation.address.trim().length < 5)
           throw new Error("Adres en az 5 karakter olmalıdır.");
-        await registerCafe({
+        registeredUser = await registerCafe({
           email,
           password,
           name: cafeName,
@@ -133,13 +195,13 @@ export default function RegisterPage() {
           throw new Error("En az bir il veya ilçe seçmelisiniz.");
         if (bandGenreIds.size === 0)
           throw new Error("En az bir müzik türü seçmelisiniz.");
-        const mc = Number(memberCount);
-        const bp = Number(basePrice);
+        const mc = parseIntegerField(memberCount);
+        const bp = parseIntegerField(basePrice);
         if (!Number.isFinite(mc) || mc < 1)
           throw new Error("Üye sayısı en az 1 olmalıdır.");
         if (!Number.isFinite(bp) || bp < 0)
           throw new Error("Taban fiyat 0 veya üzeri olmalıdır.");
-        await registerBand({
+        registeredUser = await registerBand({
           email,
           password,
           bandName,
@@ -157,9 +219,20 @@ export default function RegisterPage() {
               : undefined,
           genreIds: [...bandGenreIds],
         });
+        const raw = localStorage.getItem("canli_muzik_auth");
+        const accessToken = raw
+          ? ((JSON.parse(raw) as { accessToken?: string }).accessToken ?? null)
+          : null;
+        if (accessToken) {
+          if (bandCoverFile) {
+            await uploadBandMedia(accessToken, bandCoverFile, "IMAGE");
+          }
+          if (bandVideoFile) {
+            await uploadBandMedia(accessToken, bandVideoFile, "VIDEO");
+          }
+        }
       }
-      router.replace("/account");
-      router.refresh();
+      navigateAfterAuth(router, registeredUser.role);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kayıt başarısız.");
     } finally {
@@ -345,9 +418,11 @@ export default function RegisterPage() {
                       id="memberCount"
                       type="number"
                       min={1}
+                      step={1}
                       required
                       value={memberCount}
                       onChange={(e) => setMemberCount(e.target.value)}
+                      onWheel={blurOnWheel}
                       className={inputClass}
                     />
                   </div>
@@ -359,9 +434,11 @@ export default function RegisterPage() {
                       id="basePrice"
                       type="number"
                       min={0}
+                      step={1}
                       required
                       value={basePrice}
                       onChange={(e) => setBasePrice(e.target.value)}
+                      onWheel={blurOnWheel}
                       className={inputClass}
                     />
                   </div>
@@ -390,6 +467,53 @@ export default function RegisterPage() {
                     onChange={(e) => setBandDesc(e.target.value)}
                     className={`${inputClass} resize-y`}
                   />
+                </div>
+                <div>
+                  <label htmlFor="bandCover" className={labelClass}>
+                    Kapak görseli (isteğe bağlı)
+                  </label>
+                  <p className="mt-0.5 text-xs text-on-surface-variant/80">
+                    Ana sayfadaki öne çıkan gruplar bölümünde görünür. En fazla
+                    5 MB.
+                  </p>
+                  <input
+                    id="bandCover"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={onBandCoverChange}
+                    className={`${inputClass} cursor-pointer file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary/15 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-primary`}
+                  />
+                  {bandCoverPreview ? (
+                    <div className="mt-3 overflow-hidden rounded-xl border border-outline-variant/35">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={bandCoverPreview}
+                        alt="Kapak önizlemesi"
+                        className="aspect-[4/5] w-full max-w-xs object-cover"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                <div>
+                  <label htmlFor="bandVideo" className={labelClass}>
+                    Performans videosu (isteğe bağlı)
+                  </label>
+                  <p className="mt-0.5 text-xs text-on-surface-variant/80">
+                    Grup detay sayfasında herkes izleyebilir. En fazla 50 MB
+                    (MP4, WebM, MOV).
+                  </p>
+                  <input
+                    id="bandVideo"
+                    type="file"
+                    accept="video/mp4,video/webm,video/quicktime"
+                    onChange={onBandVideoChange}
+                    className={`${inputClass} cursor-pointer file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary/15 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-primary`}
+                  />
+                  {bandVideoFile ? (
+                    <p className="mt-2 text-sm text-on-surface-variant">
+                      Seçildi: {bandVideoFile.name}
+                    </p>
+                  ) : null}
                 </div>
                 <BandAreaPicker
                   provinces={provinces}
@@ -440,7 +564,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={pending || !ready}
-              className="w-full rounded-full bg-primary py-3.5 text-base font-bold text-on-primary transition-transform hover:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full cursor-pointer rounded-full bg-primary py-3.5 text-base font-bold text-on-primary transition-transform hover:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {pending ? "Kaydediliyor…" : "Hesap oluştur"}
             </button>

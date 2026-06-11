@@ -107,23 +107,50 @@ function ProvinceDistrictSection({
 
   const isWhole = value.wholeProvinceIds.includes(province.id);
 
+  const allDistrictsSelected =
+    districts.length > 0 &&
+    (isWhole || districts.every((d) => value.districtIds.includes(d.id)));
+
+  function provinceDistrictIds() {
+    return districts.map((d) => d.id);
+  }
+
+  function withoutProvinceDistricts(ids: string[]) {
+    const inProvince = new Set(provinceDistrictIds());
+    return ids.filter((id) => !inProvince.has(id));
+  }
+
   function toggleWhole() {
-    if (isWhole) {
+    if (allDistrictsSelected) {
       onChange({
         ...value,
         wholeProvinceIds: value.wholeProvinceIds.filter((id) => id !== province.id),
+        districtIds: withoutProvinceDistricts(value.districtIds),
+        partialProvinceIds: value.partialProvinceIds.filter((id) => id !== province.id),
       });
       return;
     }
-    const provinceDistrictIds = new Set(districts.map((d) => d.id));
     onChange({
       wholeProvinceIds: [...value.wholeProvinceIds, province.id],
-      districtIds: value.districtIds.filter((id) => !provinceDistrictIds.has(id)),
+      districtIds: withoutProvinceDistricts(value.districtIds),
       partialProvinceIds: value.partialProvinceIds.filter((id) => id !== province.id),
     });
   }
 
   function toggleDistrict(district: District) {
+    if (isWhole) {
+      const allExcept = provinceDistrictIds().filter((id) => id !== district.id);
+      onChange({
+        wholeProvinceIds: value.wholeProvinceIds.filter((id) => id !== province.id),
+        districtIds: [...withoutProvinceDistricts(value.districtIds), ...allExcept],
+        partialProvinceIds:
+          allExcept.length > 0
+            ? [...new Set([...value.partialProvinceIds, province.id])]
+            : value.partialProvinceIds.filter((id) => id !== province.id),
+      });
+      return;
+    }
+
     const has = value.districtIds.includes(district.id);
     if (has) {
       const nextDistrictIds = value.districtIds.filter((id) => id !== district.id);
@@ -137,9 +164,24 @@ function ProvinceDistrictSection({
       });
       return;
     }
+
+    const nextDistrictIds = [...value.districtIds, district.id];
+    const allSelected =
+      districts.length > 0 &&
+      districts.every((d) => nextDistrictIds.includes(d.id));
+
+    if (allSelected) {
+      onChange({
+        wholeProvinceIds: [...value.wholeProvinceIds, province.id],
+        districtIds: withoutProvinceDistricts(nextDistrictIds),
+        partialProvinceIds: value.partialProvinceIds.filter((id) => id !== province.id),
+      });
+      return;
+    }
+
     onChange({
       wholeProvinceIds: value.wholeProvinceIds.filter((id) => id !== province.id),
-      districtIds: [...value.districtIds, district.id],
+      districtIds: nextDistrictIds,
       partialProvinceIds: [...new Set([...value.partialProvinceIds, province.id])],
     });
   }
@@ -147,54 +189,54 @@ function ProvinceDistrictSection({
   return (
     <fieldset className={fieldsetClass}>
       <legend className={legendClass}>{province.name} — ilçe seçimi</legend>
-      <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-on-surface">
-        <input
-          type="checkbox"
-          className="cursor-pointer"
-          checked={isWhole}
-          onChange={toggleWhole}
-        />
-        Tüm ilçelerde çalarım
-      </label>
-      {!isWhole ? (
-        <div className="mt-3">
-          {loading ? (
-            <span className="text-sm text-on-surface-variant">İlçeler yükleniyor…</span>
-          ) : loadError ? (
-            <span className="text-sm text-red-400">
-              İlçeler yüklenemedi. Sayfayı yenileyip tekrar deneyin.
-            </span>
-          ) : districts.length === 0 ? (
-            <span className="text-sm text-on-surface-variant">
-              Bu il için ilçe bulunamadı.
-            </span>
-          ) : (
-            <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto">
-              {districts.map((d) => {
-                const checked = value.districtIds.includes(d.id);
-                return (
-                  <label
-                    key={d.id}
-                    className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                      checked
-                        ? "border-primary/50 bg-primary/15 text-primary"
-                        : "border-outline-variant/40 text-on-surface-variant hover:border-outline-variant hover:text-on-surface"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="sr-only"
-                      checked={checked}
-                      onChange={() => toggleDistrict(d)}
-                    />
-                    {d.name}
-                  </label>
-                );
-              })}
-            </div>
-          )}
-        </div>
+      {!loading && !loadError && districts.length > 0 ? (
+        <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-on-surface">
+          <input
+            type="checkbox"
+            className="cursor-pointer"
+            checked={allDistrictsSelected}
+            onChange={toggleWhole}
+          />
+          Tümü
+        </label>
       ) : null}
+      <div className="mt-3">
+        {loading ? (
+          <span className="text-sm text-on-surface-variant">İlçeler yükleniyor…</span>
+        ) : loadError ? (
+          <span className="text-sm text-red-400">
+            İlçeler yüklenemedi. Sayfayı yenileyip tekrar deneyin.
+          </span>
+        ) : districts.length === 0 ? (
+          <span className="text-sm text-on-surface-variant">
+            Bu il için ilçe bulunamadı.
+          </span>
+        ) : (
+          <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto">
+            {districts.map((d) => {
+              const checked = isWhole || value.districtIds.includes(d.id);
+              return (
+                <label
+                  key={d.id}
+                  className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                    checked
+                      ? "border-primary/50 bg-primary/15 text-primary"
+                      : "border-outline-variant/40 text-on-surface-variant hover:border-outline-variant hover:text-on-surface"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={checked}
+                    onChange={() => toggleDistrict(d)}
+                  />
+                  {d.name}
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </fieldset>
   );
 }
@@ -211,6 +253,18 @@ export function BandAreaPicker({ provinces, value, onChange }: Props) {
     },
     [],
   );
+
+  useEffect(() => {
+    for (const provinceId of value.partialProvinceIds) {
+      if (districtsCache.current.has(provinceId)) continue;
+      void apiFetch(`/provinces/${provinceId}/districts`)
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data: District[]) => {
+          districtsCache.current.set(provinceId, data);
+        })
+        .catch(() => {});
+    }
+  }, [value.partialProvinceIds]);
 
   useEffect(() => {
     const fromValue = configuredProvinceIds(value);
@@ -258,8 +312,6 @@ export function BandAreaPicker({ provinces, value, onChange }: Props) {
         <div className="mt-3 flex max-h-48 flex-wrap gap-2 overflow-y-auto">
           {provinces.map((p) => {
             const selected = selectedProvinceIds.includes(p.id);
-            const whole = value.wholeProvinceIds.includes(p.id);
-            const partial = value.partialProvinceIds.includes(p.id);
             return (
               <button
                 key={p.id}
@@ -273,7 +325,6 @@ export function BandAreaPicker({ provinces, value, onChange }: Props) {
                 }`}
               >
                 {p.name}
-                {whole ? " · tüm ilçeler" : partial ? " · seçili ilçeler" : ""}
               </button>
             );
           })}

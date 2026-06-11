@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -22,11 +22,20 @@ export class AuthService {
     private readonly config: ConfigService,
   ) {}
 
+  /** Sayısal değerler saniye; "7d", "24h" gibi stringler zaman aralığı. */
+  private jwtExpiresIn(): string | number {
+    const raw = this.config.get<string>('JWT_EXPIRES_IN') ?? '7d';
+    if (/^\d+$/.test(raw)) {
+      return parseInt(raw, 10);
+    }
+    return raw;
+  }
+
   private async signToken(userId: string, role: Role) {
     const payload: JwtPayload = { sub: userId, role };
     return this.jwt.signAsync(payload, {
       secret: this.config.getOrThrow<string>('JWT_SECRET'),
-      expiresIn: (this.config.get<string>('JWT_EXPIRES_IN') ?? '7d') as any,
+      expiresIn: this.jwtExpiresIn() as `${number}` | number,
     });
   }
 
@@ -147,6 +156,22 @@ export class AuthService {
         cafeProfile: true,
         bandProfile: true,
       },
+    });
+  }
+
+  async deleteAccount(userId: string) {
+    await this.prisma.user.delete({ where: { id: userId } });
+    return { ok: true };
+  }
+
+  /** Yalnızca geliştirme ortamında — login sayfası hızlı test listesi */
+  async listDevLoginHints() {
+    if (process.env.NODE_ENV === 'production') {
+      throw new NotFoundException();
+    }
+    return this.prisma.user.findMany({
+      select: { email: true, role: true },
+      orderBy: { email: 'asc' },
     });
   }
 }

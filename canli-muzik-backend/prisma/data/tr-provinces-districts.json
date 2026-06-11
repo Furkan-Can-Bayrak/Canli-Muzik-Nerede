@@ -435,7 +435,7 @@
     {
       "plateCode": 23,
       "name": "ELAZIĞ",
-      "discritCount": 10,
+      "discritCount": 11,
       "discrits": [
         "AĞIN",
         "ALACAKAYA",
@@ -445,6 +445,7 @@
         "KEBAN",
         "KOVANCILAR",
         "MADEN",
+        "MERKEZ",
         "PALU",
         "SİVRİCE"
       ]

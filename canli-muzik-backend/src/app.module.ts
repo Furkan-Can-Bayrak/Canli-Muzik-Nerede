@@ -11,6 +11,7 @@ import { BandsModule } from './bands/bands.module';
 import { CafesModule } from './cafes/cafes.module';
 import { EventsModule } from './events/events.module';
 import { ChatModule } from './chat/chat.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ChatModule } from './chat/chat.module';
     CafesModule,
     EventsModule,
     ChatModule,
+    ReviewsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

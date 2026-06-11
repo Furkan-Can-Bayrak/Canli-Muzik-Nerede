@@ -8,6 +8,7 @@ export type CafeWithLocation = {
   longitude: number | null;
   phone: string | null;
   description: string | null;
+  coverUrl?: string | null;
   province: { id: string; name: string; plateCode?: string };
   district: { id: string; name: string } | null;
 };
@@ -25,6 +26,7 @@ export function presentCafe(
     latitude: cafe.latitude,
     longitude: cafe.longitude,
     description: cafe.description,
+    coverUrl: cafe.coverUrl ?? null,
     province: cafe.province,
     district: cafe.district,
     /** @deprecated use province */

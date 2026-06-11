@@ -20,6 +20,7 @@ const GENRES = [
   'Akustik',
   'Elektronik',
   'Türk Halk Müziği',
+  'Türk Sanat Müziği',
   'Blues',
   'Soul',
   'Alternatif',

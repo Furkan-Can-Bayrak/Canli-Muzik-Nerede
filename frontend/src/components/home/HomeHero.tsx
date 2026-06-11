@@ -11,7 +11,13 @@ import { HOME_HERO_IMAGE } from "@/components/home/constants";
 import { ProvinceDistrictSelect } from "@/components/location/ProvinceDistrictSelect";
 import type { EventsExploreState } from "@/hooks/use-events-explore";
 
-export function HomeHero({ explore }: { explore: EventsExploreState }) {
+export function HomeHero({
+  explore,
+  onSearch,
+}: {
+  explore: EventsExploreState;
+  onSearch: () => void;
+}) {
   const {
     provinces,
     provinceId,
@@ -22,8 +28,6 @@ export function HomeHero({ explore }: { explore: EventsExploreState }) {
     setHeroSingleDate,
     q,
     setQ,
-    loadEvents,
-    locationLabel,
     locating,
     useMyLocation,
   } = explore;
@@ -46,17 +50,10 @@ export function HomeHero({ explore }: { explore: EventsExploreState }) {
           Müziğin Kalbinin Attığı{" "}
           <span className="text-primary">Yeri Keşfet.</span>
         </h1>
-        <p className="mx-auto mb-4 max-w-2xl text-lg leading-relaxed text-on-surface-variant md:text-xl md:leading-relaxed">
+        <p className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-on-surface-variant md:text-xl md:leading-relaxed">
           Şehrindeki canlı müzik etkinliklerini, grupları ve mekânları tek
           yerden bul.
         </p>
-        {locationLabel ? (
-          <p className="mx-auto mb-8 max-w-xl text-sm text-primary/90">
-            Konumunuza göre: {locationLabel}
-          </p>
-        ) : (
-          <div className="mb-8" />
-        )}
         <div className="glass-card mx-auto w-full max-w-6xl rounded-2xl border border-outline-variant/35 p-3 shadow-2xl md:rounded-3xl md:p-4">
           <div className="grid w-full grid-cols-1 gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2 px-1">
@@ -96,14 +93,14 @@ export function HomeHero({ explore }: { explore: EventsExploreState }) {
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") void loadEvents();
+                    if (e.key === "Enter") onSearch();
                   }}
                   className="min-w-0 flex-1 border-none bg-transparent py-1 font-sans text-base text-on-surface placeholder:text-on-surface-variant focus:ring-0"
                 />
               </div>
               <button
                 type="button"
-                onClick={() => void loadEvents()}
+                onClick={onSearch}
                 className="flex min-h-12 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-primary-container px-6 py-3.5 text-base font-bold text-on-primary-container transition-all hover:opacity-90 sm:px-8"
               >
                 <IconSearch />

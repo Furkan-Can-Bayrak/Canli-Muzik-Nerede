@@ -23,7 +23,7 @@ export function SiteFooter() {
               Etkinlikler
             </Link>
             <Link
-              href="/#explore"
+              href="/cafes"
               className="text-base text-on-surface-variant transition-colors hover:text-secondary"
             >
               Mekanlar

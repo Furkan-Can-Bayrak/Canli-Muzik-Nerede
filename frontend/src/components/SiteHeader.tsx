@@ -3,12 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-
-const roleLabels: Record<string, string> = {
-  CUSTOMER: "Ziyaretçi",
-  CAFE: "İşletme",
-  BAND: "Grup",
-};
+import { useUnreadMessageCount } from "@/hooks/use-unread-message-count";
 
 function NavLink({
   href,
@@ -35,8 +30,17 @@ function NavLink({
 
 export function SiteHeader() {
   const pathname = usePathname();
-  const { ready, user, logout } = useAuth();
+  const { ready, token, user, logout } = useAuth();
   const onHome = pathname === "/";
+  const canUseMessages =
+    ready && (user?.role === "CAFE" || user?.role === "BAND");
+  const activeConversationId = pathname.match(/^\/messages\/([^/]+)/)?.[1] ?? null;
+  const { count: unreadCount } = useUnreadMessageCount(
+    token,
+    user?.id,
+    Boolean(canUseMessages),
+    activeConversationId,
+  );
 
   return (
     <header className="sticky top-0 z-50 border-b border-outline-variant/30 bg-surface/75 backdrop-blur-xl">
@@ -49,44 +53,44 @@ export function SiteHeader() {
             Canlı Müzik Nerede
           </Link>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm md:gap-6 md:text-base">
-            <NavLink href="/#explore" active={onHome}>
+            <NavLink href="/" active={onHome}>
               Keşfet
             </NavLink>
             <NavLink href="/bands" active={pathname.startsWith("/bands")}>
               Gruplar
             </NavLink>
-            <NavLink href="/#explore" active={false}>
+            <NavLink href="/cafes" active={pathname.startsWith("/cafes")}>
               Mekanlar
             </NavLink>
-            <NavLink href="/" active={onHome}>
+            <NavLink
+              href="/events"
+              active={
+                pathname === "/events" || pathname.startsWith("/events/")
+              }
+            >
               Etkinlikler
             </NavLink>
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4">
-          {ready &&
-          (user?.role === "CAFE" || user?.role === "BAND") ? (
+          {canUseMessages ? (
             <Link
               href="/messages"
-              className="text-base font-medium text-on-surface-variant transition-colors hover:text-primary"
+              className={`relative inline-flex items-center gap-1.5 text-base transition-colors hover:text-primary ${
+                pathname.startsWith("/messages")
+                  ? "font-bold text-primary"
+                  : unreadCount > 0
+                    ? "font-semibold text-primary"
+                    : "font-medium text-on-surface-variant"
+              }`}
             >
               Mesajlar
-            </Link>
-          ) : null}
-          {ready && user?.role === "CAFE" ? (
-            <Link
-              href="/panel/cafe"
-              className="hidden text-base font-medium text-on-surface-variant transition-colors hover:text-primary md:inline"
-            >
-              İşletme paneli
-            </Link>
-          ) : null}
-          {ready && user?.role === "BAND" ? (
-            <Link
-              href="/panel/band"
-              className="hidden text-base font-medium text-on-surface-variant transition-colors hover:text-primary md:inline"
-            >
-              Grup paneli
+              {unreadCount > 0 ? (
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                </span>
+              ) : null}
             </Link>
           ) : null}
           {!ready ? (
@@ -99,12 +103,6 @@ export function SiteHeader() {
               >
                 Hesabım
               </Link>
-              <span
-                className="hidden max-w-[140px] truncate text-xs text-on-surface-variant sm:inline"
-                title={user.email}
-              >
-                {roleLabels[user.role] ?? user.role}
-              </span>
               <button
                 type="button"
                 onClick={() => logout()}

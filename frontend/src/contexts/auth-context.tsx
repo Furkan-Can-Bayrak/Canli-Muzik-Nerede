@@ -28,13 +28,13 @@ type AuthContextValue = {
   ready: boolean;
   token: string | null;
   user: AuthUser | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
   registerCustomer: (
     email: string,
     password: string,
     displayName?: string,
-  ) => Promise<void>;
+  ) => Promise<AuthUser>;
   registerCafe: (payload: {
     email: string;
     password: string;
@@ -46,7 +46,7 @@ type AuthContextValue = {
     longitude?: number;
     phone?: string;
     description?: string;
-  }) => Promise<void>;
+  }) => Promise<AuthUser>;
   registerBand: (payload: {
     email: string;
     password: string;
@@ -58,7 +58,7 @@ type AuthContextValue = {
     provinceIds?: string[];
     districtIds?: string[];
     genreIds: string[];
-  }) => Promise<void>;
+  }) => Promise<AuthUser>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -74,21 +74,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
-    queueMicrotask(() => {
+    let cancelled = false;
+
+    void (async () => {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const data = JSON.parse(raw) as StoredAuth;
           if (data?.accessToken && data?.user?.id) {
-            setToken(data.accessToken);
-            setUser(data.user);
+            const res = await apiFetch("/auth/me", { token: data.accessToken });
+            if (res.ok) {
+              const me = (await res.json()) as AuthUser;
+              if (!cancelled) {
+                setToken(data.accessToken);
+                setUser(me);
+              }
+            } else if (!cancelled) {
+              localStorage.removeItem(STORAGE_KEY);
+            }
           }
         }
       } catch {
         /* ignore */
+      } finally {
+        if (!cancelled) setReady(true);
       }
-      setReady(true);
-    });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const persist = useCallback((data: StoredAuth) => {
@@ -112,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) throw new Error(await readError(res));
       const body = (await res.json()) as StoredAuth;
       persist(body);
+      return body.user;
     },
     [persist],
   );
@@ -129,6 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) throw new Error(await readError(res));
       const body = (await res.json()) as StoredAuth;
       persist(body);
+      return body.user;
     },
     [persist],
   );
@@ -153,6 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) throw new Error(await readError(res));
       const body = (await res.json()) as StoredAuth;
       persist(body);
+      return body.user;
     },
     [persist],
   );
@@ -177,6 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) throw new Error(await readError(res));
       const body = (await res.json()) as StoredAuth;
       persist(body);
+      return body.user;
     },
     [persist],
   );

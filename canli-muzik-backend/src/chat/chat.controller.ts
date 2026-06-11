@@ -20,6 +20,7 @@ import type { RequestUser } from '../auth/types';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { ChatGateway } from './chat.gateway';
+import { ChatService } from './chat.service';
 
 @ApiTags('chat')
 @ApiBearerAuth('bearer')
@@ -30,28 +31,18 @@ export class ChatController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly chatGateway: ChatGateway,
+    private readonly chatService: ChatService,
   ) {}
 
   @Get('conversations')
   async listConversations(@CurrentUser() user: RequestUser) {
-    return this.prisma.conversation.findMany({
-      where:
-        user.role === Role.CAFE
-          ? { cafeUserId: user.userId }
-          : { bandUserId: user.userId },
-      orderBy: { lastMessageAt: 'desc' },
-      include: {
-        cafeUser: { select: { id: true, cafeProfile: true, email: true, role: true } },
-        bandUser: {
-          select: {
-            id: true,
-            bandProfile: { select: { userId: true, bandName: true, memberCount: true, description: true } },
-            email: true,
-            role: true,
-          },
-        },
-      },
-    });
+    return this.chatService.listConversations(user);
+  }
+
+  @Get('conversations/unread-count')
+  async unreadCount(@CurrentUser() user: RequestUser) {
+    const count = await this.chatService.unreadCount(user);
+    return { count };
   }
 
   @Post('conversations')
@@ -108,7 +99,10 @@ export class ChatController {
       throw new ForbiddenException('Not a member of this conversation');
     }
 
-    const take = Math.min(Math.max(Number(takeRaw ?? 30), 1), 100);
+    const take = Math.min(
+      Math.max(Number.isFinite(Number(takeRaw)) ? Number(takeRaw) : 30, 1),
+      100,
+    );
 
     return this.prisma.message.findMany({
       where: { conversationId },
@@ -148,8 +142,47 @@ export class ChatController {
       data: { lastMessageAt: msg.createdAt },
     });
 
-    this.chatGateway.emitMessageCreated(conv.id, msg);
+    this.chatGateway.emitMessageCreated(conv.id, msg, conv);
     return msg;
+  }
+
+  @Post('conversations/:id/read')
+  async markRead(
+    @CurrentUser() user: RequestUser,
+    @Param('id') conversationId: string,
+  ) {
+    const count = await this.chatService.markConversationRead(
+      conversationId,
+      user,
+    );
+    this.chatGateway.emitUnreadCount(user.userId, count);
+    return { count };
+  }
+
+  @Get('conversations/:id')
+  async getConversation(
+    @CurrentUser() user: RequestUser,
+    @Param('id') conversationId: string,
+  ) {
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        cafeUser: { select: { id: true, cafeProfile: true, email: true, role: true } },
+        bandUser: {
+          select: {
+            id: true,
+            bandProfile: { select: { userId: true, bandName: true } },
+            email: true,
+            role: true,
+          },
+        },
+      },
+    });
+    if (!conv) throw new NotFoundException('Conversation not found');
+    if (user.userId !== conv.cafeUserId && user.userId !== conv.bandUserId) {
+      throw new ForbiddenException('Not a member of this conversation');
+    }
+    return conv;
   }
 }
 

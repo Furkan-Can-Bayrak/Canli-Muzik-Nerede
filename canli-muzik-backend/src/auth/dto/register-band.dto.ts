@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
   IsArray,
@@ -11,6 +12,12 @@ import {
 } from 'class-validator';
 import { RegisterUserBaseDto } from './register-user-base.dto';
 
+function roundToInt(value: unknown): unknown {
+  if (value === undefined || value === null || value === '') return value;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n) : value;
+}
+
 export class RegisterBandDto extends RegisterUserBaseDto {
   @ApiProperty()
   @IsString()
@@ -18,6 +25,8 @@ export class RegisterBandDto extends RegisterUserBaseDto {
   bandName!: string;
 
   @ApiProperty()
+  @Type(() => Number)
+  @Transform(({ value }) => roundToInt(value))
   @IsInt()
   @Min(1)
   memberCount!: number;
@@ -27,6 +36,8 @@ export class RegisterBandDto extends RegisterUserBaseDto {
   phone!: string;
 
   @ApiProperty({ description: 'Base price (integer), only visible to cafes' })
+  @Type(() => Number)
+  @Transform(({ value }) => roundToInt(value))
   @IsInt()
   @Min(0)
   basePrice!: number;

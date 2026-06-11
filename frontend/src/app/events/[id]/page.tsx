@@ -1,8 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  IconCalendar,
+  IconChevronRight,
+  IconLocation,
+  IconMusicNote,
+  IconStorefront,
+} from "@/components/icons/outline";
 import { useAuth } from "@/contexts/auth-context";
 import { apiFetch } from "@/lib/api";
 
@@ -38,8 +45,13 @@ type ApiEvent = {
   } | null;
 };
 
+const sectionClass =
+  "glass-card rounded-2xl border border-outline-variant/35 p-5 shadow-xl md:p-6";
+const sectionTitleClass =
+  "text-xs font-semibold uppercase tracking-wider text-secondary/90";
+
 function formatWhen(iso: string | null) {
-  if (!iso) return "—";
+  if (!iso) return "Tarih henüz belirtilmedi";
   try {
     return new Date(iso).toLocaleString("tr-TR", {
       weekday: "long",
@@ -54,10 +66,22 @@ function formatWhen(iso: string | null) {
   }
 }
 
+function DetailSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="glass-card aspect-[21/9] animate-pulse rounded-2xl border border-outline-variant/35 bg-surface-container-high" />
+      <div className="glass-card animate-pulse rounded-2xl border border-outline-variant/35 p-8">
+        <div className="h-8 w-64 rounded-lg bg-surface-container-high" />
+        <div className="mt-3 h-4 w-48 rounded-lg bg-surface-container-high" />
+        <div className="mt-6 h-12 w-32 rounded-xl bg-surface-container-high" />
+      </div>
+    </div>
+  );
+}
+
 export default function EventDetailPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : "";
-  const router = useRouter();
   const { token, ready } = useAuth();
   const [ev, setEv] = useState<ApiEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +89,7 @@ export default function EventDetailPage() {
   useEffect(() => {
     if (!id || !ready) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       setError(null);
       try {
         const res = await apiFetch(`/events/${id}`, { token });
@@ -85,118 +109,189 @@ export default function EventDetailPage() {
     };
   }, [id, token, ready]);
 
+  const locationLabel = ev
+    ? [ev.province.name, ev.district?.name].filter(Boolean).join(" · ")
+    : "";
+
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
-      <button
-        type="button"
-        onClick={() => router.back()}
-        className="mb-6 text-sm text-zinc-600 underline hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-      >
-        ← Geri
-      </button>
+    <div className="relative min-h-[calc(100vh-10rem)] overflow-hidden px-margin-mobile py-10 md:px-margin-desktop md:py-14">
+      <div
+        className="pointer-events-none absolute -left-20 top-16 size-72 rounded-full bg-primary/10 blur-[100px]"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -right-20 bottom-10 size-72 rounded-full bg-secondary/10 blur-[100px]"
+        aria-hidden
+      />
 
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-          {error}
-          <div className="mt-3">
-            <Link href="/" className="font-medium underline">
-              Ana sayfaya dön
-            </Link>
+      <div className="relative mx-auto w-full max-w-3xl space-y-6">
+        <Link
+          href="/events"
+          className="inline-flex items-center gap-1 rounded-full border border-outline-variant/50 px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/40 hover:text-primary"
+        >
+          ← Tüm etkinlikler
+        </Link>
+
+        {error ? (
+          <div className="rounded-xl border border-error/30 bg-error-container/20 px-4 py-3 text-sm text-error">
+            {error}
+            <div className="mt-3">
+              <Link
+                href="/events"
+                className="font-semibold text-primary underline-offset-4 hover:underline"
+              >
+                Etkinlik listesine dön
+              </Link>
+            </div>
           </div>
-        </div>
-      ) : !ev ? (
-        <p className="text-sm text-zinc-500">Yükleniyor…</p>
-      ) : (
-        <article className="space-y-6">
-          <header>
-            <p className="text-sm text-zinc-500">
-              {ev.province.name}
-              {ev.district ? ` · ${ev.district.name}` : ""}
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-              {ev.title?.trim() || "Canlı müzik gecesi"}
-            </h1>
-            <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-              {formatWhen(ev.startAt)}
-              {ev.endAt ? ` — ${formatWhen(ev.endAt)}` : null}
-            </p>
-          </header>
+        ) : !ev ? (
+          <DetailSkeleton />
+        ) : (
+          <>
+            <div className="relative overflow-hidden rounded-2xl border border-outline-variant/35 shadow-xl">
+              {ev.posterUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={ev.posterUrl}
+                  alt=""
+                  className="aspect-[21/9] w-full object-cover"
+                />
+              ) : (
+                <div className="flex aspect-[21/9] w-full items-center justify-center bg-gradient-to-br from-primary/35 via-surface-container-high to-secondary/25">
+                  <IconMusicNote width={72} height={72} className="text-primary/80" />
+                </div>
+              )}
+              <span className="absolute top-4 right-4 rounded bg-primary px-2.5 py-1 font-mono text-xs font-bold text-on-primary">
+                CANLI
+              </span>
+            </div>
 
-          {ev.posterUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={ev.posterUrl}
-              alt=""
-              className="max-h-80 w-full rounded-xl object-cover"
-            />
-          ) : null}
-
-          <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="text-sm font-medium text-zinc-500">Mekân</h2>
-            <p className="mt-1 font-medium text-zinc-900 dark:text-zinc-50">
-              {ev.cafe.name}
-            </p>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              {ev.address}
-            </p>
-            {ev.cafe.description ? (
-              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                {ev.cafe.description}
-              </p>
-            ) : null}
-            {ev.cafe.phone ? (
-              <p className="mt-3 text-sm text-zinc-800 dark:text-zinc-200">
-                İletişim: {ev.cafe.phone}
-              </p>
-            ) : (
-              <p className="mt-3 text-xs text-zinc-500">
-                İşletme telefonu yalnızca yetkili kullanıcılara gösterilir.
-              </p>
-            )}
-          </section>
-
-          {ev.band ? (
-            <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="text-sm font-medium text-zinc-500">Grup</h2>
-              <p className="mt-1 font-medium text-zinc-900 dark:text-zinc-50">
-                {ev.band.bandName}
-              </p>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                {ev.band.memberCount} üye
-              </p>
-              {ev.band.description ? (
-                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  {ev.band.description}
+            <header className={`${sectionClass} space-y-5`}>
+              <div>
+                <p className="font-mono text-xs font-medium uppercase tracking-widest text-primary">
+                  Etkinlik
                 </p>
-              ) : null}
-            </section>
-          ) : null}
+                <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-on-surface md:text-4xl">
+                  {ev.title?.trim() || "Canlı müzik gecesi"}
+                </h1>
+                {locationLabel ? (
+                  <p className="mt-2 flex items-center gap-1.5 text-sm text-on-surface-variant">
+                    <IconLocation className="size-4 shrink-0" />
+                    {locationLabel}
+                  </p>
+                ) : null}
+              </div>
 
-          <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="text-sm font-medium text-zinc-500">
-              Etkinlik ücreti
-            </h2>
-            <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              {ev.price != null
-                ? `${ev.price.toLocaleString("tr-TR")} ₺`
-                : "Ücret bilgisi yok"}
-            </p>
-            <p className="mt-2 text-xs text-zinc-500">
-              Bu, işletmenin duyurduğu etkinlik / liste ücretidir. Grup ile
-              görüşülen ticari koşullar kamuya açık değildir.
-            </p>
-          </section>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-outline-variant/30 bg-surface-container/50 px-4 py-3">
+                  <p className={sectionTitleClass}>Tarih</p>
+                  <p className="mt-2 flex items-start gap-2 text-sm font-medium text-on-surface">
+                    <IconCalendar className="mt-0.5 size-4 shrink-0 text-primary" />
+                    <span>{formatWhen(ev.startAt)}</span>
+                  </p>
+                  {ev.endAt ? (
+                    <p className="mt-1 pl-6 text-xs text-on-surface-variant">
+                      Bitiş: {formatWhen(ev.endAt)}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="rounded-xl border border-outline-variant/30 bg-surface-container/50 px-4 py-3">
+                  <p className={sectionTitleClass}>Liste fiyatı</p>
+                  <p className="mt-2 font-display text-2xl font-bold text-on-surface">
+                    {ev.price != null
+                      ? `${ev.price.toLocaleString("tr-TR")} ₺`
+                      : "—"}
+                  </p>
+                  <p className="mt-1 text-xs text-on-surface-variant">
+                    İşletmenin duyurduğu giriş ücreti
+                  </p>
+                </div>
+              </div>
+            </header>
 
-          {ev.description ? (
-            <section>
-              <h2 className="text-sm font-medium text-zinc-500">Açıklama</h2>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
-                {ev.description}
-              </p>
+            {ev.description ? (
+              <section className={sectionClass}>
+                <h2 className={sectionTitleClass}>Açıklama</h2>
+                <p className="mt-3 whitespace-pre-wrap text-base leading-relaxed text-on-surface-variant">
+                  {ev.description}
+                </p>
+              </section>
+            ) : null}
+
+            <section className={sectionClass}>
+              <h2 className={sectionTitleClass}>Mekân</h2>
+              <div className="mt-4 flex items-start gap-4">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-secondary/30 bg-secondary/15">
+                  <IconStorefront className="size-6 text-secondary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-display text-lg font-semibold text-on-surface">
+                    {ev.cafe.name}
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-on-surface-variant">
+                    {ev.address}
+                  </p>
+                  {ev.cafe.description ? (
+                    <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">
+                      {ev.cafe.description}
+                    </p>
+                  ) : null}
+                  {ev.cafe.phone ? (
+                    <p className="mt-3 text-sm text-on-surface">
+                      <span className="font-medium">Telefon:</span>{" "}
+                      {ev.cafe.phone}
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-xs text-on-surface-variant">
+                      İşletme telefonu yalnızca yetkili kullanıcılara
+                      gösterilir.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <Link
+                href={`/cafes/${ev.cafe.userId}`}
+                className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+              >
+                Mekân profili
+                <IconChevronRight className="size-4" />
+              </Link>
             </section>
-          ) : null}
-        </article>
-      )}
+
+            {ev.band ? (
+              <section className={sectionClass}>
+                <h2 className={sectionTitleClass}>Sahne alan grup</h2>
+                <div className="mt-4 flex items-start gap-4">
+                  <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/15">
+                    <IconMusicNote className="size-6 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-display text-lg font-semibold text-on-surface">
+                      {ev.band.bandName}
+                    </p>
+                    <p className="mt-1 text-sm text-on-surface-variant">
+                      {ev.band.memberCount} üye
+                    </p>
+                    {ev.band.description ? (
+                      <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">
+                        {ev.band.description}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                <Link
+                  href={`/bands/${ev.band.userId}`}
+                  className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+                >
+                  Grup profili
+                  <IconChevronRight className="size-4" />
+                </Link>
+              </section>
+            ) : null}
+
+          </>
+        )}
+      </div>
     </div>
   );
 }

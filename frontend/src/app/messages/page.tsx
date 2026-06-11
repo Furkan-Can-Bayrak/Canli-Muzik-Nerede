@@ -1,145 +1,185 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { apiFetch } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ConversationList } from "@/components/messages/ConversationList";
 import { useAuth } from "@/contexts/auth-context";
+import { useInboxSocket } from "@/hooks/use-inbox-socket";
+import { apiFetch } from "@/lib/api";
+import {
+  canUseMessages,
+  defaultPathForRole,
+  resolvePostLoginPath,
+} from "@/lib/auth-routes";
+import type {
+  ConversationRow,
+  ConversationUpdatedEvent,
+} from "@/lib/messages-types";
+import { sortConversations } from "@/lib/messages-types";
 
-type ConversationRow = {
-  id: string;
-  lastMessageAt: string;
-  cafeUser: {
-    id: string;
-    email: string;
-    cafeProfile: { name: string } | null;
+function applyInboxUpdate(
+  list: ConversationRow[],
+  event: ConversationUpdatedEvent,
+  viewerUserId?: string,
+): ConversationRow[] {
+  const idx = list.findIndex((c) => c.id === event.conversationId);
+  if (idx === -1) return list;
+  const existing = list[idx]!;
+  const fromOther = Boolean(viewerUserId && event.senderId !== viewerUserId);
+  const updated: ConversationRow = {
+    ...existing,
+    lastMessageAt:
+      typeof event.lastMessageAt === "string"
+        ? event.lastMessageAt
+        : new Date(event.lastMessageAt).toISOString(),
+    lastPreview: event.preview,
+    unreadCount: fromOther
+      ? (existing.unreadCount ?? 0) + 1
+      : existing.unreadCount,
   };
-  bandUser: {
-    id: string;
-    email: string;
-    bandProfile: { bandName: string } | null;
-  };
-};
+  const rest = list.filter((_, i) => i !== idx);
+  return sortConversations([updated, ...rest]);
+}
 
 export default function MessagesIndexPage() {
   const router = useRouter();
-  const { ready, token, user } = useAuth();
+  const { ready, token, user, logout } = useAuth();
   const [list, setList] = useState<ConversationRow[]>([]);
-  const [otherId, setOtherId] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const authChecked = useRef(false);
+
+  const canView =
+    ready && Boolean(token) && Boolean(user) && canUseMessages(user?.role);
 
   const load = useCallback(async () => {
-    if (!token) return;
-    const res = await apiFetch("/conversations", { token });
-    if (!res.ok) return;
-    setList((await res.json()) as ConversationRow[]);
-  }, [token]);
+    if (!token || !canUseMessages(user?.role)) return;
+    setLoading(true);
+    try {
+      const res = await apiFetch("/conversations", { token });
+      if (res.status === 401) {
+        logout();
+        router.replace("/login?next=/messages");
+        return;
+      }
+      if (!res.ok) throw new Error();
+      const rows = (await res.json()) as ConversationRow[];
+      setList(sortConversations(rows));
+      setErr(null);
+    } catch {
+      setErr("Sohbetler yüklenemedi.");
+    } finally {
+      setLoading(false);
+    }
+  }, [token, user?.role, router, logout]);
+
+  const loadRef = useRef(load);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
+
+  const onInboxUpdate = useCallback(
+    (event: ConversationUpdatedEvent) => {
+      setList((prev) => applyInboxUpdate(prev, event, user?.id));
+    },
+    [user?.id],
+  );
+
+  const onUnreadCountChanged = useCallback(() => {
+    void loadRef.current();
+  }, []);
+
+  const { connected: inboxConnected } = useInboxSocket(
+    token,
+    canView,
+    onInboxUpdate,
+    onUnreadCountChanged,
+  );
 
   useEffect(() => {
-    if (!ready) return;
-    if (!token || (user?.role !== "CAFE" && user?.role !== "BAND")) {
+    if (!ready || authChecked.current) return;
+    authChecked.current = true;
+
+    if (!token || !user) {
       router.replace("/login?next=/messages");
       return;
     }
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (!cancelled) void load();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [ready, token, user?.role, router, load]);
-
-  function partnerLabel(c: ConversationRow): string {
-    if (user?.role === "CAFE") {
-      return c.bandUser.bandProfile?.bandName ?? "Grup";
+    if (!canUseMessages(user.role)) {
+      router.replace(resolvePostLoginPath(user.role, "/messages"));
     }
-    return c.cafeUser.cafeProfile?.name ?? "İşletme";
-  }
+  }, [ready, token, user, router]);
 
-  async function startConversation(e: FormEvent) {
-    e.preventDefault();
-    setErr(null);
-    const trimmed = otherId.trim();
-    if (!trimmed || !token) return;
-    const res = await apiFetch("/conversations", {
-      method: "POST",
-      token,
-      body: JSON.stringify({ otherUserId: trimmed }),
-    });
-    if (!res.ok) {
-      setErr(
-        "Sohbet başlatılamadı. Karşı tarafın kullanıcı UUID olduğundan ve rollerin kafe↔grup olduğundan emin olun.",
-      );
-      return;
-    }
-    const conv = (await res.json()) as { id: string };
-    setOtherId("");
-    router.push(`/messages/${conv.id}`);
-  }
+  useEffect(() => {
+    if (!canView) return;
+    void load();
+  }, [canView, load]);
 
-  if (!ready || !token || !user) {
+  if (!ready) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-16 text-center text-sm text-zinc-500">
-        Yönlendiriliyorsunuz…
+      <div className="mx-auto max-w-2xl px-margin-mobile py-16 text-center text-sm text-on-surface-variant md:px-margin-desktop">
+        Yükleniyor…
+      </div>
+    );
+  }
+
+  if (!token || !user) {
+    return (
+      <div className="mx-auto max-w-2xl px-margin-mobile py-16 text-center text-sm text-on-surface-variant md:px-margin-desktop">
+        Giriş sayfasına yönlendiriliyorsunuz…
+      </div>
+    );
+  }
+
+  if (!canUseMessages(user.role)) {
+    return (
+      <div className="mx-auto max-w-2xl px-margin-mobile py-16 text-center text-sm text-on-surface-variant md:px-margin-desktop">
+        {defaultPathForRole(user.role)} sayfasına yönlendiriliyorsunuz…
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-6 px-4 py-10">
-      <header>
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-          Mesajlar
-        </h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Yalnızca işletme ve grup hesapları mesajlaşabilir. Gerçek zamanlı
-          güncelleme sohbet ekranındadır.
-        </p>
-      </header>
+    <div className="relative min-h-[calc(100vh-10rem)] overflow-hidden px-margin-mobile py-10 md:px-margin-desktop md:py-14">
+      <div
+        className="pointer-events-none absolute -left-20 top-16 size-72 rounded-full bg-primary/10 blur-[100px]"
+        aria-hidden
+      />
+      <div className="relative mx-auto w-full max-w-2xl space-y-8">
+        <header>
+          <span className="font-mono text-xs font-medium uppercase tracking-widest text-secondary">
+            İletişim
+          </span>
+          <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-on-surface md:text-4xl">
+            Mesajlar
+          </h1>
+          <p className="mt-3 text-base text-on-surface-variant">
+            İşletme ve grup hesapları arasında anlık mesajlaşma.
+          </p>
+        </header>
 
-      <Card className="p-4">
-        <form onSubmit={startConversation} className="space-y-2">
-          <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-            Karşı kullanıcı UUID ile yeni sohbet
-          </label>
-          <input
-            value={otherId}
-            onChange={(e) => setOtherId(e.target.value)}
-            placeholder={user.role === "CAFE" ? "Grup kullanıcı ID" : "İşletme kullanıcı ID"}
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900"
+        {err ? (
+          <p className="rounded-xl border border-error/30 bg-error-container/20 px-4 py-3 text-sm text-error">
+            {err}
+          </p>
+        ) : null}
+
+        {loading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-20 animate-pulse rounded-2xl border border-outline-variant/35 bg-surface-container-high"
+              />
+            ))}
+          </div>
+        ) : (
+          <ConversationList
+            conversations={list}
+            viewerRole={user.role}
+            inboxConnected={inboxConnected}
           />
-          {err ? (
-            <p className="text-xs text-red-600 dark:text-red-400">{err}</p>
-          ) : null}
-          <Button type="submit" className="w-full sm:w-auto">
-            Sohbet aç / bul
-          </Button>
-        </form>
-      </Card>
-
-      <ul className="space-y-2">
-        {list.map((c) => (
-          <li key={c.id}>
-            <Link href={`/messages/${c.id}`}>
-              <Card className="p-4 transition hover:ring-2 hover:ring-[var(--accent)]">
-                <p className="font-medium text-zinc-900 dark:text-zinc-50">
-                  {partnerLabel(c)}
-                </p>
-                <p className="text-xs text-zinc-500">
-                  {new Date(c.lastMessageAt).toLocaleString("tr-TR")}
-                </p>
-              </Card>
-            </Link>
-          </li>
-        ))}
-      </ul>
-
-      {list.length === 0 ? (
-        <p className="text-sm text-zinc-500">Henüz sohbet yok.</p>
-      ) : null}
+        )}
+      </div>
     </div>
   );
 }

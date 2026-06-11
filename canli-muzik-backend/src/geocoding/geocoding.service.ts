@@ -55,8 +55,10 @@ export class GeocodingService {
 
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'canli-muzik-nerede/1.0 (contact@example.com)',
+        'User-Agent': 'canli-muzik-nerede/1.0',
+        Accept: 'application/json',
       },
+      signal: AbortSignal.timeout(12_000),
     });
     if (!res.ok) {
       throw new ServiceUnavailableException('Reverse geocoding failed');
@@ -68,6 +70,7 @@ export class GeocodingService {
       addr.state ?? addr.province ?? addr.city ?? addr.town ?? null;
     const districtName =
       addr.city_district ??
+      addr.town ??
       addr.county ??
       addr.municipality ??
       addr.suburb ??

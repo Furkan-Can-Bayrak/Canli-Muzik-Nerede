@@ -84,7 +84,13 @@ function ExploreNightCard({ ev }: { ev: ExploreApiEvent }) {
   );
 }
 
-export function EventsExplorer({ explore }: { explore: EventsExploreState }) {
+export function EventsExplorer({
+  explore,
+  variant = "section",
+}: {
+  explore: EventsExploreState;
+  variant?: "section" | "page";
+}) {
   const {
     provinces,
     bands,
@@ -96,8 +102,6 @@ export function EventsExplorer({ explore }: { explore: EventsExploreState }) {
     setBandId,
     q,
     setQ,
-    cafeId,
-    setCafeId,
     minPrice,
     setMinPrice,
     maxPrice,
@@ -112,18 +116,37 @@ export function EventsExplorer({ explore }: { explore: EventsExploreState }) {
     loadEvents,
   } = explore;
 
+  const isPage = variant === "page";
+
   return (
-    <section id="explore" className="scroll-mt-24 bg-surface-container-low">
-      <div className="mx-auto max-w-container-max space-y-10 px-margin-mobile py-24 md:px-margin-desktop">
+    <section
+      id={isPage ? undefined : "explore"}
+      className={
+        isPage ? "relative scroll-mt-24" : "scroll-mt-24 bg-surface-container-low"
+      }
+    >
+      <div
+        className={`mx-auto max-w-container-max space-y-10 px-margin-mobile md:px-margin-desktop ${
+          isPage ? "py-10 md:py-14" : "py-24"
+        }`}
+      >
         <div className="space-y-4">
           <span className="font-mono text-xs font-medium uppercase tracking-widest text-secondary">
-            Takvim
+            {isPage ? "Etkinlikler" : "Takvim"}
           </span>
-          <h2 className="font-display text-3xl font-bold text-on-surface md:text-4xl">
-            Yaklaşan etkinlikler
-          </h2>
+          <h1
+            className={`font-display font-bold text-on-surface ${
+              isPage
+                ? "text-3xl tracking-tight md:text-5xl"
+                : "text-3xl md:text-4xl"
+            }`}
+          >
+            {isPage ? "Canlı müzik etkinlikleri" : "Yaklaşan etkinlikler"}
+          </h1>
           <p className="max-w-3xl text-base leading-relaxed text-on-surface-variant">
-            Şehir, tarih, grup ve anahtar kelime ile süzün.{" "}
+            {isPage
+              ? "Yayında olan etkinlikleri filtreleyin ve detay sayfasından mekân ile grup bilgisine ulaşın."
+              : "Şehir, tarih, grup ve anahtar kelime ile süzün."}{" "}
             <strong className="font-semibold text-on-surface">
               Liste fiyatı
             </strong>{" "}
@@ -260,27 +283,6 @@ export function EventsExplorer({ explore }: { explore: EventsExploreState }) {
               Listeyi yenile
             </button>
           </div>
-
-          <details className="rounded-xl border border-outline-variant/30 bg-surface-container/80 px-4 py-3 text-base">
-            <summary className="cursor-pointer font-medium text-on-surface">
-              Gelişmiş filtre
-            </summary>
-            <div className="mt-3">
-              <label
-                className="mb-1 block font-mono text-xs text-on-surface-variant"
-                htmlFor="cafe-id"
-              >
-                Kafe kullanıcı UUID
-              </label>
-              <input
-                id="cafe-id"
-                placeholder="İşletme panelinden"
-                value={cafeId}
-                onChange={(e) => setCafeId(e.target.value)}
-                className="w-full rounded-lg border border-outline-variant/40 bg-surface-container px-3 py-2 font-mono text-xs text-on-surface outline-none focus:border-primary/50"
-              />
-            </div>
-          </details>
         </div>
 
         {error ? (

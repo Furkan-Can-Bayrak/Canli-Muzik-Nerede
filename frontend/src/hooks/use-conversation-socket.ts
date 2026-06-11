@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { getSocketOrigin } from "@/lib/socket-url";
 
@@ -10,15 +10,24 @@ export function useConversationSocket(
   onMessage: (msg: unknown) => void,
 ) {
   const handlerRef = useRef(onMessage);
+  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     handlerRef.current = onMessage;
   }, [onMessage]);
 
   useEffect(() => {
-    if (!token || !conversationId) return;
+    if (!token || !conversationId) {
+      setConnected(false);
+      setError(null);
+      return;
+    }
     const origin = getSocketOrigin();
-    if (!origin) return;
+    if (!origin) {
+      setError("Socket adresi tanımlı değil.");
+      return;
+    }
 
     const socket: Socket = io(origin, {
       auth: { token },
@@ -30,7 +39,14 @@ export function useConversationSocket(
     };
 
     socket.on("connect", () => {
+      setConnected(true);
+      setError(null);
       socket.emit("joinConversation", { conversationId });
+    });
+    socket.on("disconnect", () => setConnected(false));
+    socket.on("connect_error", () => {
+      setConnected(false);
+      setError("Canlı bağlantı kurulamadı.");
     });
     socket.on("messageCreated", onCreated);
 
@@ -38,6 +54,9 @@ export function useConversationSocket(
       socket.emit("leaveConversation", { conversationId });
       socket.off("messageCreated", onCreated);
       socket.disconnect();
+      setConnected(false);
     };
   }, [token, conversationId]);
+
+  return { connected, error };
 }
