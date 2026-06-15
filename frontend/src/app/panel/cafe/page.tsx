@@ -11,10 +11,11 @@ import {
   useState,
 } from "react";
 import { BusinessAddressPicker } from "@/components/location/BusinessAddressPicker";
-import { ProvinceDistrictSelect } from "@/components/location/ProvinceDistrictSelect";
 import { DeleteAccountButton } from "@/components/account/DeleteAccountButton";
 import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/contexts/toast-context";
 import { apiFetch } from "@/lib/api";
+import { blurOnWheel, parseIntegerField } from "@/lib/number-input";
 import {
   normalizeCoverUrl,
   removeCafeCover,
@@ -96,6 +97,7 @@ export default function CafePanelPage() {
   const preselectBandId = searchParams.get("bandId");
   const appliedBandPreselect = useRef<string | null>(null);
   const { ready, token, user, logout } = useAuth();
+  const toast = useToast();
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [bands, setBands] = useState<BandOption[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
@@ -264,6 +266,18 @@ export default function CafePanelPage() {
     e.preventDefault();
     setMsg(null);
     setErr(null);
+    if (!cafeLocation.provinceId) {
+      setErr("İl seçin.");
+      return;
+    }
+    if (!cafeLocation.districtId) {
+      setErr("İlçe seçin.");
+      return;
+    }
+    if (cafeLocation.address.trim().length < 5) {
+      setErr("Adres en az 5 karakter olmalıdır.");
+      return;
+    }
     const res = await apiFetch("/cafes/me", {
       method: "PATCH",
       token,
@@ -303,7 +317,7 @@ export default function CafePanelPage() {
         return;
       }
     }
-    setMsg("Profil güncellendi.");
+    toast.success("Profil güncellendi.");
   }
 
   function revokePosterObjectUrl() {
@@ -394,7 +408,7 @@ export default function CafePanelPage() {
       title: evTitle || undefined,
       description: evDescription || undefined,
       startAt: evStart ? new Date(evStart).toISOString() : undefined,
-      price: priceRaw === "" ? undefined : Number.parseInt(priceRaw, 10),
+      price: priceRaw === "" ? undefined : parseIntegerField(priceRaw),
       bandId: evBandId || undefined,
     };
     const res = editingId
@@ -681,6 +695,7 @@ export default function CafePanelPage() {
                       min={0}
                       value={evPrice}
                       onChange={(e) => setEvPrice(e.target.value)}
+                      onWheel={blurOnWheel}
                       placeholder="Boş bırakılabilir"
                       className={inputClass}
                     />

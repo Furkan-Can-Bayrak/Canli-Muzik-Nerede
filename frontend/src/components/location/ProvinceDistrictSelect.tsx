@@ -16,6 +16,9 @@ type Props = {
   onDistrictChange: (id: string) => void;
   provinceLabel?: string;
   districtLabel?: string;
+  emptyProvinceLabel?: string;
+  /** Filtrelerde boş = tüm ilçeler; mekân adresinde tek ilçe zorunlu. */
+  requireDistrict?: boolean;
   compact?: boolean;
   className?: string;
 };
@@ -28,6 +31,8 @@ export function ProvinceDistrictSelect({
   onDistrictChange,
   provinceLabel = "İl",
   districtLabel = "İlçe",
+  emptyProvinceLabel = "Tüm iller",
+  requireDistrict = false,
   compact = false,
   className = "",
 }: Props) {
@@ -69,13 +74,10 @@ export function ProvinceDistrictSelect({
         <select
           aria-label={provinceLabel}
           value={provinceId}
-          onChange={(e) => {
-            onProvinceChange(e.target.value);
-            onDistrictChange("");
-          }}
+          onChange={(e) => onProvinceChange(e.target.value)}
           className={selectClass}
         >
-          <option value="">Tüm iller</option>
+          <option value="">{emptyProvinceLabel}</option>
           {provinces.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -97,7 +99,9 @@ export function ProvinceDistrictSelect({
               ? "Önce il seçin"
               : loadingDistricts
                 ? "Yükleniyor…"
-                : "Tüm ilçeler"}
+                : requireDistrict
+                  ? "İlçe seçin"
+                  : "Tüm ilçeler"}
           </option>
           {districts.map((d) => (
             <option key={d.id} value={d.id}>

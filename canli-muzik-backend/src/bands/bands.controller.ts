@@ -60,7 +60,20 @@ export class BandsController {
     const and: Prisma.BandProfileWhereInput[] = [];
 
     if (q.districtId) {
-      and.push({ districts: { some: { districtId: q.districtId } } });
+      and.push({
+        OR: [
+          { districts: { some: { districtId: q.districtId } } },
+          {
+            provinces: {
+              some: {
+                province: {
+                  districts: { some: { id: q.districtId } },
+                },
+              },
+            },
+          },
+        ],
+      });
     } else if (q.provinceId) {
       and.push({
         OR: [

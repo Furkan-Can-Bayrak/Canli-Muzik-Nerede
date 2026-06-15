@@ -12,6 +12,7 @@ import {
 import { useAuth } from "@/contexts/auth-context";
 import { apiFetch } from "@/lib/api";
 import { uploadBandMedia } from "@/lib/band-media";
+import { uploadCafeCover } from "@/lib/cafe-cover";
 import { blurOnWheel, parseIntegerField } from "@/lib/number-input";
 import { navigateAfterAuth } from "@/lib/auth-routes";
 import type { BusinessAddressValue, Province } from "@/lib/location-types";
@@ -54,6 +55,8 @@ export default function RegisterPage() {
   });
   const [cafePhone, setCafePhone] = useState("");
   const [cafeDesc, setCafeDesc] = useState("");
+  const [cafeCoverFile, setCafeCoverFile] = useState<File | null>(null);
+  const [cafeCoverPreview, setCafeCoverPreview] = useState<string | null>(null);
 
   const [bandName, setBandName] = useState("");
   const [memberCount, setMemberCount] = useState("3");
@@ -143,6 +146,26 @@ export default function RegisterPage() {
     setBandVideoFile(file);
   }
 
+  function onCafeCoverChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setCafeCoverFile(null);
+      setCafeCoverPreview(null);
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setError("Kapak görseli JPEG, PNG, WebP veya GIF olmalıdır.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Görsel en fazla 5 MB olabilir.");
+      return;
+    }
+    setError(null);
+    setCafeCoverFile(file);
+    setCafeCoverPreview(URL.createObjectURL(file));
+  }
+
   function onBandCoverChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) {
@@ -173,6 +196,7 @@ export default function RegisterPage() {
         registeredUser = await registerCustomer(email, password);
       } else if (tab === "cafe") {
         if (!cafeLocation.provinceId) throw new Error("İl seçin.");
+        if (!cafeLocation.districtId) throw new Error("İlçe seçin.");
         if (cafeLocation.address.trim().length < 5)
           throw new Error("Adres en az 5 karakter olmalıdır.");
         registeredUser = await registerCafe({
@@ -187,6 +211,16 @@ export default function RegisterPage() {
           phone: cafePhone || undefined,
           description: cafeDesc || undefined,
         });
+        if (cafeCoverFile) {
+          const raw = localStorage.getItem("canli_muzik_auth");
+          const accessToken = raw
+            ? ((JSON.parse(raw) as { accessToken?: string }).accessToken ??
+              null)
+            : null;
+          if (accessToken) {
+            await uploadCafeCover(accessToken, cafeCoverFile);
+          }
+        }
       } else {
         if (
           bandArea.wholeProvinceIds.length === 0 &&
@@ -363,6 +397,31 @@ export default function RegisterPage() {
                   value={cafeLocation}
                   onChange={setCafeLocation}
                 />
+                <div>
+                  <label htmlFor="cafeCover" className={labelClass}>
+                    Kapak görseli (isteğe bağlı)
+                  </label>
+                  <p className="mt-0.5 text-xs text-on-surface-variant/80">
+                    Mekân listesinde ve profilinizde görünür. En fazla 5 MB.
+                  </p>
+                  <input
+                    id="cafeCover"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={onCafeCoverChange}
+                    className={`${inputClass} cursor-pointer file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary/15 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-primary`}
+                  />
+                  {cafeCoverPreview ? (
+                    <div className="mt-3 overflow-hidden rounded-xl border border-outline-variant/35">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={cafeCoverPreview}
+                        alt="Kapak önizlemesi"
+                        className="aspect-[4/5] w-full max-w-xs object-cover"
+                      />
+                    </div>
+                  ) : null}
+                </div>
                 <div>
                   <label htmlFor="cafePhone" className={labelClass}>
                     Telefon (isteğe bağlı)

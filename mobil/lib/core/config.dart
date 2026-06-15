@@ -1,14 +1,23 @@
-/// Derleme zamanı `--dart-define=API_BASE_URL=...` ile geçilir.
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
+
+/// API tabanı: `--dart-define=API_BASE_URL=...` ile geçilebilir.
 ///
-/// Yerel geliştirme: Flutter web istemcisinde olduğu gibi sonunda `/` olmaz.
-/// Android emülatörde makine `localhost` → genelde `http://10.0.2.2:3000`
+/// Android emülatörde `localhost` emülatörün kendisidir; bilgisayardaki backend
+/// için varsayılan `http://10.0.2.2:3000` kullanılır.
 class AppConfig {
   AppConfig._();
 
-  static const String apiBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://localhost:3000',
-  );
+  static String get apiBaseUrl {
+    const fromEnv = String.fromEnvironment('API_BASE_URL');
+    if (fromEnv.trim().isNotEmpty) return fromEnv.trim();
+
+    if (!kIsWeb && Platform.isAndroid) {
+      return 'http://10.0.2.2:3000';
+    }
+    return 'http://localhost:3000';
+  }
 
   static String get normalizedApiBaseUrl {
     final t = apiBaseUrl.trim();
@@ -18,6 +27,5 @@ class AppConfig {
     return t.endsWith('/') ? t.substring(0, t.length - 1) : t;
   }
 
-  /// Arayüzde göstermek için (debug / README ile uyumlu).
   static bool get hasApiBaseUrl => normalizedApiBaseUrl.isNotEmpty;
 }

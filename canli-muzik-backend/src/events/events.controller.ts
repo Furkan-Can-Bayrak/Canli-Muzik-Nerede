@@ -33,6 +33,10 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { ListEventsQuery } from './dto/list-events.query';
 import { UploadsService } from '../uploads/uploads.service';
+import {
+  findEventIdsByTurkishAddress,
+  findEventIdsByTurkishSearch,
+} from './event-search';
 
 const posterUploadInterceptor = FileInterceptor('file', {
   storage: memoryStorage(),
@@ -86,7 +90,7 @@ export class EventsController {
     return ev;
   }
 
-  private buildWhere(q: ListEventsQuery): Prisma.EventWhereInput {
+  private async buildWhere(q: ListEventsQuery): Promise<Prisma.EventWhereInput> {
     const and: Prisma.EventWhereInput[] = [];
 
     const provinceId = q.provinceId ?? q.cityId;
@@ -112,18 +116,11 @@ export class EventsController {
     const searchTerm = q.q?.trim();
     const addrTerm = q.addressContains?.trim();
     if (searchTerm) {
-      and.push({
-        OR: [
-          { address: { contains: searchTerm, mode: 'insensitive' } },
-          {
-            cafe: {
-              name: { contains: searchTerm, mode: 'insensitive' },
-            },
-          },
-        ],
-      });
+      const ids = await findEventIdsByTurkishSearch(this.prisma, searchTerm);
+      and.push({ id: { in: ids } });
     } else if (addrTerm) {
-      and.push({ address: { contains: addrTerm, mode: 'insensitive' } });
+      const ids = await findEventIdsByTurkishAddress(this.prisma, addrTerm);
+      and.push({ id: { in: ids } });
     }
 
     if (and.length === 0) return {};
@@ -173,7 +170,7 @@ export class EventsController {
     @Query() q: ListEventsQuery,
     @CurrentUser() user?: RequestUser,
   ) {
-    const baseWhere = this.buildWhere(q);
+    const baseWhere = await this.buildWhere(q);
     const where = this.mergeWhere(baseWhere, this.visibilityWhere(q, user));
     const take = Math.min(q.take ?? 20, 100);
     const skip = q.skip ?? 0;
@@ -293,6 +290,9 @@ export class EventsController {
     return { ok: true };
   }
 
+  @ApiBearerAuth('bearer')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.BAND)
   @Post(':id/publish')
   async publishAsBand(
     @CurrentUser() user: RequestUser,

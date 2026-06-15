@@ -11,6 +11,7 @@ import {
 } from "@/components/location/BandAreaPicker";
 import { DeleteAccountButton } from "@/components/account/DeleteAccountButton";
 import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/contexts/toast-context";
 import { apiFetch } from "@/lib/api";
 import {
   normalizeBandMedia,
@@ -97,6 +98,7 @@ function formatEventDate(iso: string | null): string | null {
 export default function BandPanelPage() {
   const router = useRouter();
   const { ready, token, user, logout } = useAuth();
+  const toast = useToast();
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [genres, setGenres] = useState<Genre[]>([]);
   const [loading, setLoading] = useState(true);
@@ -265,7 +267,7 @@ export default function BandPanelPage() {
       setErr("Profil kaydedilemedi.");
       return;
     }
-    setMsg("Profil güncellendi.");
+    toast.success("Profil güncellendi.");
   }
 
   if (!ready || !token || user?.role !== "BAND") {

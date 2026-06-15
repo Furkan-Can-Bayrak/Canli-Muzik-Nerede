@@ -193,7 +193,11 @@ export function BusinessAddressPicker({
         provinces={provinces}
         provinceId={value.provinceId}
         districtId={value.districtId ?? ""}
-        onProvinceChange={(id) => onChange({ ...value, provinceId: id })}
+        emptyProvinceLabel="İl seçin"
+        requireDistrict
+        onProvinceChange={(id) =>
+          onChange({ ...value, provinceId: id, districtId: null })
+        }
         onDistrictChange={(id) =>
           onChange({ ...value, districtId: id || null })
         }

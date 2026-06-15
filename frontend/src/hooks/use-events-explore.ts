@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { sortExploreEvents } from "@/lib/event-timing";
 import { getCurrentPosition } from "@/lib/geolocation";
 import type { Province, ReverseGeocodeResult } from "@/lib/location-types";
 
@@ -23,6 +24,7 @@ export type ExploreApiEvent = {
   address: string;
   description: string | null;
   startAt: string | null;
+  endAt?: string | null;
   price: number | null;
   posterUrl?: string | null;
   provinceId: string;
@@ -104,6 +106,7 @@ export function useEventsExplore(
   const [districtId, setDistrictId] = useState("");
   const [bandId, setBandId] = useState("");
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [cafeId, setCafeId] = useState(initialCafeId);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
@@ -120,7 +123,10 @@ export function useEventsExplore(
       return;
     }
     urlFiltersApplied.current = true;
-    if (urlFilters.q) setQ(urlFilters.q);
+    if (urlFilters.q) {
+      setQ(urlFilters.q);
+      setDebouncedQ(urlFilters.q);
+    }
     if (urlFilters.cafeId) setCafeId(urlFilters.cafeId);
     if (urlFilters.bandId) setBandId(urlFilters.bandId);
     if (urlFilters.dateFrom) setDateFrom(urlFilters.dateFrom);
@@ -132,20 +138,18 @@ export function useEventsExplore(
   }, [urlFilters, provinces.length]);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQ(q), 300);
+    return () => clearTimeout(timer);
+  }, [q]);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [provincesRes, bandsRes] = await Promise.all([
-          apiFetch("/provinces"),
-          apiFetch("/bands"),
-        ]);
+        const provincesRes = await apiFetch("/provinces");
         if (!provincesRes.ok) throw new Error("İl listesi alınamadı.");
         const provinceData = (await provincesRes.json()) as Province[];
         if (!cancelled) setProvinces(provinceData);
-        if (bandsRes.ok && !cancelled) {
-          const bandData = (await bandsRes.json()) as ExploreBandSummary[];
-          setBands(bandData);
-        }
       } catch (e) {
         if (!cancelled)
           setError(e instanceof Error ? e.message : "Ağ hatası.");
@@ -155,6 +159,28 @@ export function useEventsExplore(
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const qs = new URLSearchParams();
+        if (districtId) qs.set("districtId", districtId);
+        else if (provinceId) qs.set("provinceId", provinceId);
+        const suffix = qs.toString() ? `?${qs.toString()}` : "";
+        const bandsRes = await apiFetch(`/bands${suffix}`);
+        if (bandsRes.ok && !cancelled) {
+          const bandData = (await bandsRes.json()) as ExploreBandSummary[];
+          setBands(bandData);
+        }
+      } catch {
+        /* band listesi isteğe bağlı */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [provinceId, districtId]);
 
   const applyLocation = useCallback((data: ReverseGeocodeResult) => {
       if (!data.provinceId) return false;
@@ -241,12 +267,12 @@ export function useEventsExplore(
     }
   }, [resolveLocationFromCoords]);
 
-  const loadEvents = useCallback(async () => {
+  const loadEvents = useCallback(async (opts?: { q?: string }) => {
     setLoading(true);
     setError(null);
     try {
       const qs = new URLSearchParams();
-      const query = q.trim();
+      const query = (opts?.q ?? debouncedQ).trim();
       if (query) qs.set("q", query);
       const cId = cafeId.trim();
       if (cId) qs.set("cafeId", cId);
@@ -277,7 +303,7 @@ export function useEventsExplore(
       const res = await apiFetch(`/events?${qs.toString()}`, { token });
       if (!res.ok) throw new Error("Etkinlikler yüklenemedi.");
       const data = (await res.json()) as ExploreApiEvent[];
-      setEvents(data);
+      setEvents(sortExploreEvents(data));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ağ hatası.");
       setEvents([]);
@@ -288,7 +314,7 @@ export function useEventsExplore(
     provinceId,
     districtId,
     bandId,
-    q,
+    debouncedQ,
     cafeId,
     minPrice,
     maxPrice,

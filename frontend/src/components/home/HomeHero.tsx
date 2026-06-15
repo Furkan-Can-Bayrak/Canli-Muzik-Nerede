@@ -61,7 +61,10 @@ export function HomeHero({
                 provinces={provinces}
                 provinceId={provinceId}
                 districtId={districtId}
-                onProvinceChange={setProvinceId}
+                onProvinceChange={(id) => {
+                  setProvinceId(id);
+                  setDistrictId("");
+                }}
                 onDistrictChange={setDistrictId}
                 compact
                 className="min-w-0 flex-1"
@@ -89,7 +92,7 @@ export function HomeHero({
                 <IconStorefront />
                 <input
                   type="search"
-                  placeholder="Mekân veya grup ara…"
+                  placeholder="Mekân, grup veya adres ara…"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   onKeyDown={(e) => {

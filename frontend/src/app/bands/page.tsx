@@ -116,7 +116,10 @@ export default function BandsDirectoryPage() {
               provinces={provinces}
               provinceId={provinceId}
               districtId={districtId}
-              onProvinceChange={setProvinceId}
+              onProvinceChange={(id) => {
+                setProvinceId(id);
+                setDistrictId("");
+              }}
               onDistrictChange={setDistrictId}
               provinceLabel="Şehir (il)"
               districtLabel="İlçe"

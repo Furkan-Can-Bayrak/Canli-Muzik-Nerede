@@ -47,7 +47,7 @@ export class ListEventsQuery {
 
   @ApiPropertyOptional({
     description:
-      'Search in event address or cafe name (case-insensitive, public listing)',
+      'Search in event title, address, cafe name/address, band name, province or district (Turkish/ASCII insensitive)',
   })
   @IsOptional()
   @IsString()

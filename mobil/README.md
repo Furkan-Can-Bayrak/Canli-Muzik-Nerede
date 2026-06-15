@@ -1,10 +1,16 @@
-# Mobil (Flutter)
+# Mobil (Flutter) — Müşteri uygulaması
 
-[canli-muzik-backend](../canli-muzik-backend) NestJS API’sine bağlanan istemci. Web’deki ile aynı sözleşme: taban URL’nin sonunda `/` olmaz; kimlik doğrulamada `Authorization: Bearer …`.
+[canli-muzik-backend](../canli-muzik-backend) NestJS API’sine bağlanan **müşteri** istemcisi. Web’deki ile aynı sözleşme: taban URL’nin sonunda `/` olmaz; kimlik doğrulamada `Authorization: Bearer …`.
 
-## Proje
+## Kapsam
 
-Canlı Müzik Nerede, canlı müzik etkinliklerini tek platformda toplayarak kafe işletmecileri, müzik grupları ve müşteriler arasında iletişim ile planlamayı kolaylaştırmayı hedefler; roller profil ve içerik yönetimi, görünür etkinlikler ve müşteriler için korunan (telefon, ayrıntılı fiyat gibi) alanları ayırır. Ana giriş ekranındaki tam metin `lib/content/app_copy.dart` dosyasında tutulur; web ana sayfadaki kahraman başlık ve kısa tanıtımla paraleldir.
+Bu uygulama yalnızca müşteri deneyimini hedefler:
+
+- **Giriş yapmadan:** yayınlanmış etkinlikleri listeleme ve detay görüntüleme (web ile aynı filtreler)
+- **Giriş / kayıt:** müşteri hesabı (`CUSTOMER` rolü)
+- **Hesabım:** profil bilgisi, çıkış, hesap silme
+
+Kapsam dışı: işletme/grup panelleri, mesajlaşma, ayrı kafe/grup dizin sayfaları, yorum yazma.
 
 ## Gereksinimler
 
@@ -30,7 +36,27 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
 - **iOS simülatör:** genelde `http://localhost:3000`.
 - **Fiziksel cihaz:** aynı Wi‑Fi’da bilgisayarın yerel IP’si, örn. `http://192.168.1.10:3000`.
 
-İlk açılışta uygulama `GET /auth/me` (tokensız) çağırır; **401 veya 403** “giriş yok” için beklenen yanıtlardır (Next.js arayüzündeki kontrol ile uyumlu).
+## Oturum
+
+- Kayıt: `POST /auth/register/customer`
+- Giriş: `POST /auth/login`
+- Token `flutter_secure_storage` içinde saklanır; açılışta `GET /auth/me` ile doğrulanır.
+- İşletme veya grup hesabıyla giriş reddedilir.
+
+## Etkinlik keşfi
+
+Ana ekranda web `/events` ile uyumlu filtreler:
+
+| UI | API parametresi |
+|----|-----------------|
+| Mekân arama | `q` |
+| İl / ilçe | `provinceId`, `districtId` |
+| Grup | `bandId` |
+| Tarih aralığı | `startAtFrom`, `startAtTo` |
+| Min / max fiyat | `minPrice`, `maxPrice` |
+| Kafe UUID | `cafeId` |
+
+İl/ilçe tercihi `shared_preferences` ile saklanır. “Konumumu kullan” `geolocator` + `GET /geocoding/reverse` kullanır.
 
 ## Yerel HTTP (geliştirme)
 
@@ -43,11 +69,6 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
 cd mobil
 flutter test
 ```
-
-## Yol haritası (vizyon metniyle uyum)
-
-1. **Müşteri MVP:** etkinlik keşfi (`GET /events`, `GET /events/:id`), şehir / tarih / mekân araması; kamuya açık yanıtlarda işletme telefonunun gelmemesi backend tarafında uygulanır.
-2. **Sonraki adımlar:** işletme ve grup için oturum akışı, profil düzenleme, sohbet (REST mesaj gönderimi veya Socket.IO ile canlı dinleme).
 
 ## CORS
 

@@ -8,6 +8,8 @@ import {
   IconMusicNote,
 } from "@/components/icons/outline";
 import { ProvinceDistrictSelect } from "@/components/location/ProvinceDistrictSelect";
+import { isPastEvent } from "@/lib/event-timing";
+import { blurOnWheel } from "@/lib/number-input";
 import type {
   ExploreApiEvent,
   EventsExploreState,
@@ -27,11 +29,17 @@ function formatWhenShort(iso: string | null) {
 }
 
 function ExploreNightCard({ ev }: { ev: ExploreApiEvent }) {
+  const past = isPastEvent(ev);
+
   return (
     <li>
       <Link
         href={`/events/${ev.id}`}
-        className="group flex h-full flex-col overflow-hidden rounded-2xl border border-outline-variant/25 bg-surface-container transition-all hover:border-primary/45"
+        className={`group flex h-full flex-col overflow-hidden rounded-2xl border bg-surface-container transition-all ${
+          past
+            ? "border-outline-variant/30 opacity-80 hover:opacity-90"
+            : "border-outline-variant/25 hover:border-primary/45"
+        }`}
       >
         <div className="relative h-48 overflow-hidden bg-surface-container-high">
           {ev.posterUrl ? (
@@ -39,23 +47,47 @@ function ExploreNightCard({ ev }: { ev: ExploreApiEvent }) {
             <img
               src={ev.posterUrl}
               alt=""
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className={`h-full w-full object-cover transition-transform duration-300 ${
+                past
+                  ? "grayscale-[0.65] brightness-75"
+                  : "group-hover:scale-105"
+              }`}
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/35 via-surface-container-high to-secondary/25">
+            <div
+              className={`flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/35 via-surface-container-high to-secondary/25 ${
+                past ? "opacity-60" : ""
+              }`}
+            >
               <IconMusicNote width={52} height={52} />
             </div>
           )}
-          <div className="absolute top-4 right-4 rounded bg-primary px-2 py-1 font-mono text-xs font-medium text-on-primary">
-            CANLI
+          <div
+            className={`absolute top-4 right-4 rounded px-2 py-1 font-mono text-xs font-medium ${
+              past
+                ? "border border-outline-variant/50 bg-surface-container-high/90 text-on-surface-variant"
+                : "bg-primary text-on-primary"
+            }`}
+          >
+            {past ? "GEÇMİŞ" : "CANLI"}
           </div>
         </div>
         <div className="flex flex-1 flex-col p-6">
-          <div className="mb-2 flex items-center gap-2 font-mono text-xs text-primary">
+          <div
+            className={`mb-2 flex items-center gap-2 font-mono text-xs ${
+              past ? "text-on-surface-variant" : "text-primary"
+            }`}
+          >
             <IconCalendar width={16} height={16} />
             {formatWhenShort(ev.startAt)}
           </div>
-          <h4 className="mb-1 font-display text-xl font-semibold text-on-surface transition-colors group-hover:text-primary">
+          <h4
+            className={`mb-1 font-display text-xl font-semibold transition-colors ${
+              past
+                ? "text-on-surface-variant"
+                : "text-on-surface group-hover:text-primary"
+            }`}
+          >
             {ev.title?.trim() || "Canlı müzik gecesi"}
           </h4>
           <p className="mb-6 flex flex-1 items-start gap-2 text-base text-on-surface-variant">
@@ -162,7 +194,10 @@ export function EventsExplorer({
                 provinces={provinces}
                 provinceId={provinceId}
                 districtId={districtId}
-                onProvinceChange={setProvinceId}
+                onProvinceChange={(id) => {
+                  setProvinceId(id);
+                  setDistrictId("");
+                }}
                 onDistrictChange={setDistrictId}
                 provinceLabel="İl"
                 districtLabel="İlçe"
@@ -228,14 +263,17 @@ export function EventsExplorer({
                 className="mb-1 block font-mono text-xs font-medium text-on-surface-variant"
                 htmlFor="venue-q"
               >
-                Mekân / kafe adı
+                Mekân, grup veya adres
               </label>
               <input
                 id="venue-q"
                 type="search"
-                placeholder="Örn. Kadıköy…"
+                placeholder="Örn. Moda Sahne, Kadıköy, grup adı…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void loadEvents({ q });
+                }}
                 className="min-h-11 w-full rounded-lg border border-outline-variant/40 bg-surface-container px-3 py-2 text-base text-on-surface outline-none focus:border-primary/50"
               />
             </div>
@@ -254,6 +292,7 @@ export function EventsExplorer({
                 placeholder="—"
                 value={minPrice}
                 onChange={(e) => setMinPrice(e.target.value)}
+                onWheel={blurOnWheel}
                 className="min-h-11 w-full rounded-lg border border-outline-variant/40 bg-surface-container px-3 py-2 text-base text-on-surface outline-none focus:border-primary/50"
               />
             </div>
@@ -272,12 +311,13 @@ export function EventsExplorer({
                 placeholder="—"
                 value={maxPrice}
                 onChange={(e) => setMaxPrice(e.target.value)}
+                onWheel={blurOnWheel}
                 className="min-h-11 w-full rounded-lg border border-outline-variant/40 bg-surface-container px-3 py-2 text-base text-on-surface outline-none focus:border-primary/50"
               />
             </div>
             <button
               type="button"
-              onClick={() => void loadEvents()}
+              onClick={() => void loadEvents({ q })}
               className="min-h-11 rounded-full bg-primary-container px-6 text-base font-bold text-on-primary-container transition-opacity hover:opacity-90 lg:self-end"
             >
               Listeyi yenile
@@ -312,11 +352,33 @@ export function EventsExplorer({
             </p>
           </div>
         ) : (
-          <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {events.map((ev) => (
-              <ExploreNightCard key={ev.id} ev={ev} />
-            ))}
-          </ul>
+          <>
+            {events.some((ev) => !isPastEvent(ev)) ? (
+              <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {events
+                  .filter((ev) => !isPastEvent(ev))
+                  .map((ev) => (
+                    <ExploreNightCard key={ev.id} ev={ev} />
+                  ))}
+              </ul>
+            ) : null}
+            {events.some((ev) => isPastEvent(ev)) ? (
+              <div className={events.some((ev) => !isPastEvent(ev)) ? "mt-12" : ""}>
+                {events.some((ev) => !isPastEvent(ev)) ? (
+                  <p className="mb-6 font-mono text-xs font-medium uppercase tracking-widest text-on-surface-variant">
+                    Geçmiş etkinlikler
+                  </p>
+                ) : null}
+                <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                  {events
+                    .filter((ev) => isPastEvent(ev))
+                    .map((ev) => (
+                      <ExploreNightCard key={ev.id} ev={ev} />
+                    ))}
+                </ul>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
     </section>
